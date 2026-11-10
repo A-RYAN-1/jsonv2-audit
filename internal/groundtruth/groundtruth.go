@@ -58,7 +58,7 @@ type StringBool struct {
 }
 
 type StringSlice struct {
-	S []int `json:"s,string,omitempty"`
+	S []int `json:"s,string,omitempty"` //nolint:staticcheck // SA5008: the invalid tag is the case under test
 }
 
 type FormatTag struct {
