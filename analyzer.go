@@ -225,11 +225,11 @@ func (w *walker) walk(t types.Type, addr bool, s site) {
 	case *types.Map:
 		w.walk(u.Elem(), false, site{s.pos, s.name + "[]"})
 	case *types.Struct:
-		w.walkStruct(t, u, addr)
+		w.walkStruct(t, u, addr, s.name)
 	}
 }
 
-func (w *walker) walkStruct(t types.Type, st *types.Struct, addr bool) {
+func (w *walker) walkStruct(t types.Type, st *types.Struct, addr bool, path string) {
 	key := types.TypeString(t, nil)
 	if addr {
 		key += "|addr"
@@ -238,7 +238,7 @@ func (w *walker) walkStruct(t types.Type, st *types.Struct, addr bool) {
 		return
 	}
 	w.seen[key] = true
-	name := w.typeName(t)
+	name := w.typeName(t, path)
 
 	if w.mode == decode && hasSerializedField(st) {
 		w.report(site{w.typePos(t), name}, "case-insensitive")
@@ -416,11 +416,14 @@ func (w *walker) typePos(t types.Type) token.Pos {
 	return w.call
 }
 
-func (w *walker) typeName(t types.Type) string {
+// typeName names a struct in messages: a named type by its name, an
+// anonymous struct by the path that reached it, so two anonymous structs
+// never share a name.
+func (w *walker) typeName(t types.Type, path string) string {
 	if _, ok := t.(*types.Named); ok {
 		return types.TypeString(t, types.RelativeTo(w.pass.Pkg))
 	}
-	return "struct"
+	return path
 }
 
 func hasSerializedField(st *types.Struct) bool {
