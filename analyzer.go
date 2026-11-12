@@ -1,6 +1,7 @@
 package jsonv2audit
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -16,13 +17,76 @@ import (
 const docURL = "https://github.com/A-RYAN-1/jsonv2-audit"
 
 // Analyzer reports the types reached from encoding/json calls whose
-// marshaling or unmarshaling changes under encoding/json/v2.
-var Analyzer = &analysis.Analyzer{
-	Name:     "jsonv2audit",
-	Doc:      "report encoding/json types whose behaviour changes under encoding/json/v2, with the option that keeps v1 behaviour",
-	URL:      docURL,
-	Requires: []*analysis.Analyzer{inspect.Analyzer},
-	Run:      run,
+// marshaling or unmarshaling changes under encoding/json/v2. Its -skip flag
+// takes a comma-separated list of rule IDs not to report; under go vet it
+// is spelled -jsonv2audit.skip.
+var Analyzer = newAnalyzer(ruleSet{})
+
+// Config selects what an analyzer made by [NewAnalyzer] reports.
+type Config struct {
+	// Skip lists rule IDs (see [Rules]) that are not reported.
+	Skip []string
+}
+
+// NewAnalyzer returns an analyzer like [Analyzer] that applies cfg. It is
+// the entry point for tools that configure analyzers in code, such as the
+// golangci-lint module plugin. It returns an error for an unknown rule ID.
+func NewAnalyzer(cfg Config) (*analysis.Analyzer, error) {
+	skip := ruleSet{}
+	for _, id := range cfg.Skip {
+		if err := skip.add(id); err != nil {
+			return nil, err
+		}
+	}
+	return newAnalyzer(skip), nil
+}
+
+func newAnalyzer(skip ruleSet) *analysis.Analyzer {
+	a := &analysis.Analyzer{
+		Name:     "jsonv2audit",
+		Doc:      "report encoding/json types whose behaviour changes under encoding/json/v2, with the option that keeps v1 behaviour",
+		URL:      docURL,
+		Requires: []*analysis.Analyzer{inspect.Analyzer},
+		Run:      func(pass *analysis.Pass) (any, error) { return run(pass, skip) },
+	}
+	a.Flags.Var(skip, "skip", "comma-separated rule IDs not to report")
+	return a
+}
+
+// ruleSet is a set of rule IDs; as a flag.Value it accepts a
+// comma-separated list and rejects unknown IDs.
+type ruleSet map[string]bool
+
+func (s ruleSet) add(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	if _, ok := ruleByID[id]; !ok {
+		return fmt.Errorf("unknown rule %q (jsonv2-audit -rules lists them)", id)
+	}
+	s[id] = true
+	return nil
+}
+
+func (s ruleSet) String() string {
+	ids := make([]string, 0, len(s))
+	for _, r := range Rules {
+		if s[r.ID] {
+			ids = append(ids, r.ID)
+		}
+	}
+	return strings.Join(ids, ",")
+}
+
+func (s ruleSet) Set(v string) error {
+	clear(s)
+	for _, id := range strings.Split(v, ",") {
+		if err := s.add(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type mode int
@@ -53,6 +117,7 @@ type site struct {
 
 type state struct {
 	pass     *analysis.Pass
+	skip     ruleSet
 	reported map[string]bool
 }
 
@@ -63,9 +128,9 @@ type walker struct {
 	seen map[string]bool
 }
 
-func run(pass *analysis.Pass) (any, error) {
+func run(pass *analysis.Pass, skip ruleSet) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-	st := &state{pass: pass, reported: map[string]bool{}}
+	st := &state{pass: pass, skip: skip, reported: map[string]bool{}}
 	insp.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
 		call := n.(*ast.CallExpr)
 		fn, _ := typeutil.Callee(pass.TypesInfo, call).(*types.Func)
@@ -325,7 +390,7 @@ func isMethod(t types.Type, name string) bool {
 
 func (w *walker) report(s site, id string) {
 	key := id + "|" + s.name
-	if w.reported[key] {
+	if w.skip[id] || w.reported[key] {
 		return
 	}
 	w.reported[key] = true

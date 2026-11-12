@@ -1,0 +1,7 @@
+version: v2.15.0
+name: gcl-jsonv2audit
+destination: ./bin
+plugins:
+  - module: github.com/A-RYAN-1/jsonv2-audit
+    import: github.com/A-RYAN-1/jsonv2-audit/golangci
+    path: .

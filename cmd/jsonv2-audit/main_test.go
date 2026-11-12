@@ -71,3 +71,25 @@ func TestRulesAndBadArgs(t *testing.T) {
 		t.Fatalf("missing package exit %d", code)
 	}
 }
+
+func TestSkip(t *testing.T) {
+	var out, errb bytes.Buffer
+	run([]string{"-skip", "nil-slice,duration", "-C", "../..", "./internal/groundtruth"}, &out, &errb)
+	s := out.String()
+	if strings.Contains(s, "[nil-slice]") || strings.Contains(s, "[duration]") {
+		t.Errorf("skipped rules still reported:\n%s", s)
+	}
+	if !strings.Contains(s, "[nil-map]") {
+		t.Errorf("other rules missing:\n%s", s)
+	}
+}
+
+func TestSkipUnknownRule(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"-skip", "nil-slcie", "-C", "../..", "./internal/groundtruth"}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if !strings.Contains(errb.String(), `unknown rule "nil-slcie"`) {
+		t.Errorf("stderr does not name the rule: %s", errb.String())
+	}
+}
