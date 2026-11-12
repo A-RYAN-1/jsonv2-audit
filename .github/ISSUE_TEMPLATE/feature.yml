@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose something jsonv2-audit should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem you are solving
+      description: The v1 to v2 behaviour difference it should catch, with the Go release notes or source that documents it.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
