@@ -19,4 +19,4 @@ example.com/pets: 2 finding(s)
 
 `jsonv2-audit -rules` lists every rule. `-json` prints machine-readable output, `-all` lists the case-insensitive decoding findings one by one, and `-tests` includes test files. Exit status is 0 with no findings, 1 with findings, 2 when packages fail to load.
 
-Status: private, in development. Requires Go 1.27.
+Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1). Requires Go 1.27. Last updated: 2026-11-12.
