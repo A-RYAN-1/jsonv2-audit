@@ -4,11 +4,12 @@
 //
 // Usage:
 //
-//	jsonv2-audit [-json] [-all] [-tests] [-rules] [-C dir] [packages]
+//	jsonv2-audit [-json] [-all] [-tests] [-rules] [-skip ids] [-C dir] [packages]
 //
 // Packages default to ./... . The text output counts case-insensitive
 // findings (every decoded struct has one) instead of listing them; -all
-// lists them, and -json always includes them. Exit status: 0 no findings, 1 findings,
+// lists them, and -json always includes them. -skip takes a comma-separated
+// list of rule IDs not to report. Exit status: 0 no findings, 1 findings,
 // 2 the packages did not load.
 package main
 
@@ -58,6 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	listRules := fs.Bool("rules", false, "list the rules and exit")
 	all := fs.Bool("all", false, "list case-insensitive findings one by one")
 	dir := fs.String("C", "", "run in this directory")
+	skip := fs.String("skip", "", "comma-separated rule IDs not to report")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -75,7 +77,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	sums, err := audit(*dir, patterns, *tests)
+	an, err := jsonv2audit.NewAnalyzer(jsonv2audit.Config{Skip: strings.Split(*skip, ",")})
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "jsonv2-audit:", err)
+		return 2
+	}
+	sums, err := audit(an, *dir, patterns, *tests)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "jsonv2-audit:", err)
 		return 2
@@ -98,7 +105,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func audit(dir string, patterns []string, tests bool) ([]Summary, error) {
+func audit(an *analysis.Analyzer, dir string, patterns []string, tests bool) ([]Summary, error) {
 	cfg := &packages.Config{Mode: packages.LoadAllSyntax, Tests: tests, Dir: dir}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
@@ -107,7 +114,7 @@ func audit(dir string, patterns []string, tests bool) ([]Summary, error) {
 	if n := packages.PrintErrors(pkgs); n > 0 {
 		return nil, fmt.Errorf("%d package errors", n)
 	}
-	g, err := checker.Analyze([]*analysis.Analyzer{jsonv2audit.Analyzer}, pkgs, nil)
+	g, err := checker.Analyze([]*analysis.Analyzer{an}, pkgs, nil)
 	if err != nil {
 		return nil, err
 	}

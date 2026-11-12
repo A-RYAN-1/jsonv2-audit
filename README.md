@@ -17,6 +17,46 @@ example.com/pets: 2 finding(s)
   to keep v1 behaviour under v2: json.OmitEmptyWithLegacySemantics(true), jsonv2.FormatNilSliceAsNull(true)
 ```
 
-`jsonv2-audit -rules` lists every rule. `-json` prints machine-readable output, `-all` lists the case-insensitive decoding findings one by one, and `-tests` includes test files. Exit status is 0 with no findings, 1 with findings, 2 when packages fail to load.
+`jsonv2-audit -rules` lists every rule. `-json` prints machine-readable output, `-all` lists the case-insensitive decoding findings one by one, `-tests` includes test files, and `-skip nil-slice,omitempty` turns rules off. Exit status is 0 with no findings, 1 with findings, 2 when packages fail to load or a skipped rule does not exist.
 
-Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1). Requires Go 1.27. Last updated: 2026-11-12.
+## Under go vet
+
+```
+go install github.com/A-RYAN-1/jsonv2-audit/cmd/jsonv2-audit-vet@latest
+go vet -vettool=$(which jsonv2-audit-vet) ./...
+go vet -vettool=$(which jsonv2-audit-vet) -jsonv2audit.skip=case-insensitive ./...
+```
+
+go vet checks one package at a time, so a finding on a type declared in another package is reported at the `encoding/json` call. The per-package option summary is only in the `jsonv2-audit` command.
+
+## In golangci-lint
+
+The `golangci` package is a [module plugin](https://golangci-lint.run/docs/plugins/module-plugins/). Build a custom binary with `golangci-lint custom` from a `.custom-gcl.yml`:
+
+```yaml
+version: v2.15.0
+plugins:
+  - module: github.com/A-RYAN-1/jsonv2-audit
+    import: github.com/A-RYAN-1/jsonv2-audit/golangci
+    version: <version>
+```
+
+and enable it in `.golangci.yml`:
+
+```yaml
+version: "2"
+linters:
+  enable: [jsonv2audit]
+  settings:
+    custom:
+      jsonv2audit:
+        type: module
+        settings:
+          skip: [case-insensitive]
+issues:
+  uniq-by-line: false
+```
+
+`skip` is the only setting; an unknown rule ID or setting stops the run with an error. golangci-lint keeps one issue per line by default, and every finding on an imported type sits on the call line, so `uniq-by-line: false` shows them all. `scripts/golangci-e2e.sh` builds the custom binary from this checkout and checks it (CI job `golangci-plugin`).
+
+Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1); go vet tool, golangci-lint plugin and `-skip` added 2026-11-12. Requires Go 1.27. Last updated: 2026-11-12.

@@ -1,0 +1,12 @@
+version: "2"
+linters:
+  default: none
+  enable: [jsonv2audit]
+  settings:
+    custom:
+      jsonv2audit:
+        type: module
+        settings:
+          skip: [nil-slcie]
+issues:
+  uniq-by-line: false
