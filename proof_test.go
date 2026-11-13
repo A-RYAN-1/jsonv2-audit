@@ -41,10 +41,19 @@ var options = map[string]struct {
 }
 
 func TestRuleOptionsMatchProof(t *testing.T) {
-	if len(options) != len(jsonv2audit.Rules) {
-		t.Fatalf("proof covers %d rules, analyzer has %d", len(options), len(jsonv2audit.Rules))
+	n := 0
+	for _, r := range jsonv2audit.Rules {
+		if !r.Advisory {
+			n++
+		}
+	}
+	if len(options) != n {
+		t.Fatalf("proof covers %d rules, analyzer has %d", len(options), n)
 	}
 	for _, r := range jsonv2audit.Rules {
+		if r.Advisory {
+			continue
+		}
 		o, ok := options[r.ID]
 		if !ok {
 			t.Errorf("rule %s has no proof option", r.ID)
@@ -92,6 +101,9 @@ func rulesFor(found map[string]bool, decode bool) []string {
 	var ids []string
 	for id := range found {
 		r, _ := jsonv2audit.RuleByID(id)
+		if r.Advisory {
+			continue
+		}
 		if (decode && r.Decode) || (!decode && r.Encode) {
 			ids = append(ids, id)
 		}
@@ -173,5 +185,74 @@ func TestEveryRuleHasACase(t *testing.T) {
 		if !seen[r.ID] {
 			t.Errorf("rule %s has no groundtruth case", r.ID)
 		}
+	}
+}
+
+// TestV1OptionsAreSufficient checks the v1-options advice against real v2
+// output: for every groundtruth call that passes DefaultOptionsV1, v2 with
+// only the options the analyzer says the value needs gives the same result
+// as v2 with all of DefaultOptionsV1, so the options it lists as not needed
+// can be dropped.
+func TestV1OptionsAreSufficient(t *testing.T) {
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.LoadAllSyntax}, "./internal/groundtruth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := checker.Analyze([]*analysis.Analyzer{jsonv2audit.Analyzer}, pkgs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string][]jsonv2.Options{}
+	for _, o := range options {
+		if o.expr != "" {
+			byName[strings.SplitN(o.expr, "(", 2)[0]] = o.opts
+		}
+	}
+	checked := 0
+	for _, act := range g.Roots {
+		for _, d := range act.Diagnostics {
+			if d.Category != "v1-options" {
+				continue
+			}
+			typ, rest, _ := strings.Cut(d.Message, ": ")
+			fn, _, _ := strings.Cut(rest, " ")
+			var opts []jsonv2.Options
+			if _, after, ok := strings.Cut(d.Message, "this value needs "); ok {
+				list, _, _ := strings.Cut(after, "; pass these instead")
+				for _, name := range strings.Split(list, ", ") {
+					o, known := byName[name]
+					if !known {
+						t.Fatalf("%s: unknown option %q in %q", typ, name, d.Message)
+					}
+					opts = append(opts, o...)
+				}
+			}
+			checked++
+			if fn == "Marshal" {
+				v := groundtruth.Encode[typ]
+				if v == nil {
+					continue
+				}
+				ref, e1 := jsonv2.Marshal(v, json.DefaultOptionsV1())
+				got, e2 := jsonv2.Marshal(v, opts...)
+				if string(ref) != string(got) || (e1 == nil) != (e2 == nil) {
+					t.Errorf("%s encode: DefaultOptionsV1 gave %s (%v), the needed options gave %s (%v)", typ, ref, e1, got, e2)
+				}
+				continue
+			}
+			c, ok := groundtruth.Decode[typ]
+			if !ok {
+				continue
+			}
+			r1, r2 := c.New(), c.New()
+			e1 := jsonv2.Unmarshal([]byte(c.Input), r1, json.DefaultOptionsV1())
+			e2 := jsonv2.Unmarshal([]byte(c.Input), r2, opts...)
+			if !reflect.DeepEqual(r1, r2) || (e1 == nil) != (e2 == nil) {
+				t.Errorf("%s decode: DefaultOptionsV1 gave %+v (%v), the needed options gave %+v (%v)", typ, r1, e1, r2, e2)
+			}
+		}
+	}
+	if checked < 20 {
+		t.Errorf("only %d v1-options findings checked", checked)
 	}
 }

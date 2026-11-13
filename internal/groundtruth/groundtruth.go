@@ -6,6 +6,7 @@ package groundtruth
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"time"
 )
 
@@ -205,4 +206,37 @@ func roots() {
 	_ = json.Unmarshal(nil, new(DuplicateName))
 }
 
+// v2roots gives the analyzer v2 calls that pass DefaultOptionsV1, one per
+// case, for the v1-options proof.
+func v2roots() {
+	o := json.DefaultOptionsV1()
+	_, _ = jsonv2.Marshal(NilSlice{}, o)
+	_, _ = jsonv2.Marshal(NilMap{}, o)
+	_, _ = jsonv2.Marshal(NilBytes{}, o)
+	_, _ = jsonv2.Marshal(ByteArray{}, o)
+	_, _ = jsonv2.Marshal(NamedByteSlice{}, o)
+	_, _ = jsonv2.Marshal(OmitBool{}, o)
+	_, _ = jsonv2.Marshal(OmitInt{}, o)
+	_, _ = jsonv2.Marshal(OmitStruct{}, o)
+	_, _ = jsonv2.Marshal(OmitPtr{}, o)
+	_, _ = jsonv2.Marshal(StringBool{}, o)
+	_, _ = jsonv2.Marshal(StringSlice{}, o)
+	_, _ = jsonv2.Marshal(FormatTag{}, o)
+	_, _ = jsonv2.Marshal(Duration{}, o)
+	_, _ = jsonv2.Marshal(DurationSlice{}, o)
+	_, _ = jsonv2.Marshal(PtrMethod{}, o)
+	_, _ = jsonv2.Marshal(CleanScalars{}, o)
+	_, _ = jsonv2.Marshal(CleanCollections{}, o)
+	_, _ = jsonv2.Marshal(CleanPtrMethod{}, o)
+	_ = jsonv2.Unmarshal(nil, new(CaseFold), o)
+	_ = jsonv2.Unmarshal(nil, new(ByteArray), o)
+	_ = jsonv2.Unmarshal(nil, new(Duration), o)
+	_ = jsonv2.Unmarshal(nil, new(StringBool), o)
+	_ = jsonv2.Unmarshal(nil, new(ArrayLength), o)
+	_ = jsonv2.Unmarshal(nil, new(NullResets), o)
+	_, _ = jsonv2.Marshal(DuplicateName{}, o)
+	_ = jsonv2.Unmarshal(nil, new(DuplicateName), o)
+}
+
 var _ = roots
+var _ = v2roots
