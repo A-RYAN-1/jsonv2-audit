@@ -16,6 +16,9 @@ import (
 
 const docURL = "https://github.com/A-RYAN-1/jsonv2-audit"
 
+// rulesURL is the rules page; each finding links to its section.
+const rulesURL = docURL + "/blob/main/docs/rules.md"
+
 // Analyzer reports the types reached from encoding/json calls whose
 // marshaling or unmarshaling changes under encoding/json/v2. Its -skip flag
 // takes a comma-separated list of rule IDs not to report; under go vet it
@@ -201,7 +204,7 @@ func reportV1Options(pass *analysis.Pass, call *ast.CallExpr, pos token.Pos, t t
 		msg += "; not needed by this value: " + strings.Join(drop, ", ")
 	}
 	msg += "; not judged (depend on the data, not the types): " + strings.Join(UnanalyzedV1Options, ", ")
-	pass.Report(analysis.Diagnostic{Pos: pos, Category: "v1-options", Message: msg, URL: docURL + "#v1-options"})
+	pass.Report(analysis.Diagnostic{Pos: pos, Category: "v1-options", Message: msg, URL: rulesURL + "#v1-options"})
 }
 
 // optionName turns "json.Foo(true)" into "json.Foo".
@@ -613,7 +616,7 @@ func (w *walker) report(s site, id string) {
 	if r.Option != "" {
 		msg += "; to keep v1 behaviour pass " + r.Option
 	}
-	w.pass.Report(analysis.Diagnostic{Pos: s.pos, Category: id, Message: msg, URL: docURL + "#" + id})
+	w.pass.Report(analysis.Diagnostic{Pos: s.pos, Category: id, Message: msg, URL: rulesURL + "#" + id})
 }
 
 func (w *walker) fieldPos(f *types.Var) token.Pos {
