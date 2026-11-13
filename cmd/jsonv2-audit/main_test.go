@@ -19,7 +19,10 @@ func TestFindingsAndSummary(t *testing.T) {
 		"to keep v1 behaviour under v2: ",
 		"json.FormatDurationAsNano(true)",
 		"needs a code change: format-tag",
-		"4 decoded struct type(s) rely on case-insensitive",
+		"8 decoded struct type(s) rely on case-insensitive",
+		"8 decoded struct type(s) have a field that v2 resets on JSON null",
+		"[array-length] ArrayLength.A:",
+		"[duplicate-name] DuplicateName:",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output lacks %q:\n%s", want, s)

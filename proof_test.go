@@ -35,6 +35,9 @@ var options = map[string]struct {
 	"duration":           {"json.FormatDurationAsNano(true)", []jsonv2.Options{json.FormatDurationAsNano(true)}},
 	"ptr-method":         {"json.CallMethodsWithLegacySemantics(true)", []jsonv2.Options{json.CallMethodsWithLegacySemantics(true)}},
 	"case-insensitive":   {"jsonv2.MatchCaseInsensitiveNames(true)", []jsonv2.Options{jsonv2.MatchCaseInsensitiveNames(true)}},
+	"array-length":       {"json.UnmarshalArrayFromAnyLength(true)", []jsonv2.Options{json.UnmarshalArrayFromAnyLength(true)}},
+	"null-resets":        {"json.MergeWithLegacySemantics(true)", []jsonv2.Options{json.MergeWithLegacySemantics(true)}},
+	"duplicate-name":     {"json.ReportErrorsWithLegacySemantics(true)", []jsonv2.Options{json.ReportErrorsWithLegacySemantics(true)}},
 }
 
 func TestRuleOptionsMatchProof(t *testing.T) {

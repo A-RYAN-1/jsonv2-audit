@@ -85,6 +85,26 @@ type CaseFold struct {
 	Name string `json:"name"`
 }
 
+type ArrayLength struct {
+	A [3]int `json:"a"`
+}
+
+type nullInner struct {
+	A int `json:"a"`
+	B int `json:"b"`
+}
+
+type NullResets struct {
+	I nullInner `json:"i"`
+	N int       `json:"n"`
+	S string    `json:"s"`
+}
+
+type DuplicateName struct {
+	X int
+	B int `json:"X"`
+}
+
 // Clean types: the analyzer must report nothing, and v1 and v2 must agree.
 
 type CleanScalars struct {
@@ -125,6 +145,7 @@ var Encode = map[string]any{
 	"Duration":         Duration{D: time.Second},
 	"DurationSlice":    DurationSlice{D: []time.Duration{time.Second}},
 	"PtrMethod":        PtrMethod{M: map[string]ptrMarshaler{"k": {}}},
+	"DuplicateName":    DuplicateName{X: 1, B: 2},
 	"CleanScalars":     CleanScalars{S: "x", N: 1, F: 1.5, T: time.Unix(0, 0).UTC()},
 	"CleanCollections": CleanCollections{S: []int{1}, M: map[string]int{"a": 1}, B: []byte("hi"), R: json.RawMessage(`{"a":1}`)},
 	"CleanPtrMethod":   CleanPtrMethod{P: &ptrMarshaler{}},
@@ -142,6 +163,12 @@ var Decode = map[string]Decoder{
 	"ByteArray":  {`{"a":[1,2,3,4]}`, func() any { return new(ByteArray) }},
 	"Duration":   {`{"d":1000}`, func() any { return new(Duration) }},
 	"StringBool": {`{"b":"true"}`, func() any { return new(StringBool) }},
+
+	"ArrayLength": {`{"a":[1,2]}`, func() any { return new(ArrayLength) }},
+	"NullResets": {`{"i":null,"n":null,"s":null}`, func() any {
+		return &NullResets{I: nullInner{A: 3, B: 4}, N: 5, S: "s"}
+	}},
+	"DuplicateName": {`{"x":1}`, func() any { return new(DuplicateName) }},
 }
 
 // FormatTag fails in both versions, so it has no value to compare; the proof
@@ -172,6 +199,10 @@ func roots() {
 	_ = json.Unmarshal(nil, new(ByteArray))
 	_ = json.Unmarshal(nil, new(Duration))
 	_ = json.Unmarshal(nil, new(StringBool))
+	_ = json.Unmarshal(nil, new(ArrayLength))
+	_ = json.Unmarshal(nil, new(NullResets))
+	_, _ = json.Marshal(DuplicateName{})
+	_ = json.Unmarshal(nil, new(DuplicateName))
 }
 
 var _ = roots

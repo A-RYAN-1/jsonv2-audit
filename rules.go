@@ -13,6 +13,11 @@ type Rule struct {
 	// moves to v2, with json meaning encoding/json and jsonv2 meaning
 	// encoding/json/v2. Empty when no option exists and the code must change.
 	Option string
+	// Folded rules fire on most decoded structs, so the text output counts
+	// them per package (with FoldedNote) instead of listing them; -all lists
+	// them.
+	Folded     bool
+	FoldedNote string
 }
 
 // Rules lists every rule the analyzer reports, in a stable order.
@@ -77,9 +82,26 @@ var Rules = []Rule{
 		Option:  "json.CallMethodsWithLegacySemantics(true)",
 	},
 	{
-		ID: "case-insensitive", Decode: true,
-		Summary: "object names match field names case-insensitively in v1 and exactly in v2 (or tag a field with case:ignore)",
-		Option:  "jsonv2.MatchCaseInsensitiveNames(true)",
+		ID: "case-insensitive", Decode: true, Folded: true,
+		FoldedNote: "decoded struct type(s) rely on case-insensitive name matching",
+		Summary:    "object names match field names case-insensitively in v1 and exactly in v2 (or tag a field with case:ignore)",
+		Option:     "jsonv2.MatchCaseInsensitiveNames(true)",
+	},
+	{
+		ID: "array-length", Decode: true,
+		Summary: "a JSON array of any length fills a Go array in v1 (extra elements dropped, missing ones left alone) and must match its length exactly in v2",
+		Option:  "json.UnmarshalArrayFromAnyLength(true)",
+	},
+	{
+		ID: "null-resets", Decode: true, Folded: true,
+		FoldedNote: "decoded struct type(s) have a field that v2 resets on JSON null",
+		Summary:    "a JSON null leaves a struct, number, string or bool field unchanged in v1 and resets it to its zero value in v2 (matters when decoding into a value that already holds data)",
+		Option:     "json.MergeWithLegacySemantics(true)",
+	},
+	{
+		ID: "duplicate-name", Encode: true, Decode: true,
+		Summary: "two fields of one struct with the same JSON name are both silently ignored in v1 and an error in v2",
+		Option:  "json.ReportErrorsWithLegacySemantics(true)",
 	},
 }
 

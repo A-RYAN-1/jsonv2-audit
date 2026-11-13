@@ -94,6 +94,7 @@ var scalarKinds = []func() genField{
 	func() genField {
 		return genField{"[4]byte", reflect.TypeOf([4]byte{}), reflect.ValueOf([4]byte{1, 2, 3, 4})}
 	},
+	func() genField { return genField{"[3]int", reflect.TypeOf([3]int{}), reflect.ValueOf([3]int{1, 2, 3})} },
 	func() genField { return genField{"[]Octet", reflect.TypeOf([]Octet{}), reflect.ValueOf([]Octet{1, 2})} },
 	func() genField {
 		return genField{"map[string]int", reflect.TypeOf(map[string]int{}), reflect.ValueOf(map[string]int{"k": 1})}
@@ -167,6 +168,8 @@ func genStruct(r *rand.Rand, depth int) genField {
 		tag := fmt.Sprintf("f%d", i)
 		if r.Intn(12) == 0 {
 			tag, opts = "-", nil
+		} else if i > 0 && r.Intn(15) == 0 {
+			tag = fmt.Sprintf("f%d", i-1) // may repeat the previous field's JSON name
 		}
 		if len(opts) > 0 {
 			tag += "," + strings.Join(opts, ",")
@@ -299,8 +302,35 @@ func TestPropertyPredictionsMatchEncoding(t *testing.T) {
 				if e1 != nil {
 					continue
 				}
-				for variant, in := range map[string]string{"plain": string(b1), "upper": upperKey.ReplaceAllStringFunc(string(b1), strings.ToUpper)} {
-					v1, v2, v3 := reflect.New(f.typ), reflect.New(f.typ), reflect.New(f.typ)
+				// Targets start from the populated value (rebuilt from its own
+				// JSON so no two share pointers); "null" sets every top-level
+				// member to null.
+				fullJSON, fe := json.Marshal(f.full.Interface())
+				prefilled := func() reflect.Value {
+					p := reflect.New(f.typ)
+					if fe == nil {
+						_ = json.Unmarshal(fullJSON, p.Interface())
+					}
+					return p
+				}
+				nulls := map[string]string{}
+				var members map[string]json.RawMessage
+				if json.Unmarshal(b1, &members) == nil {
+					for k := range members {
+						members[k] = json.RawMessage("null")
+					}
+					nb, _ := json.Marshal(members)
+					nulls["null"] = string(nb)
+				}
+				variants := map[string]string{"plain": string(b1), "upper": upperKey.ReplaceAllStringFunc(string(b1), strings.ToUpper)}
+				for k, v := range nulls {
+					variants[k] = v
+				}
+				if short := strings.ReplaceAll(string(b1), "[1,2,3]", "[1,2]"); short != string(b1) {
+					variants["short"] = short
+				}
+				for variant, in := range variants {
+					v1, v2, v3 := prefilled(), prefilled(), prefilled()
 					d1 := json.Unmarshal([]byte(in), v1.Interface())
 					d2 := jsonv2.Unmarshal([]byte(in), v2.Interface())
 					dDiffers := !reflect.DeepEqual(v1.Interface(), v2.Interface()) || (d1 == nil) != (d2 == nil)

@@ -221,6 +221,9 @@ func (w *walker) walk(t types.Type, addr bool, s site) {
 			w.report(s, "byte-array")
 			return
 		}
+		if w.mode == decode {
+			w.report(s, "array-length")
+		}
 		w.walk(u.Elem(), addr, site{s.pos, s.name + "[]"})
 	case *types.Map:
 		w.walk(u.Elem(), false, site{s.pos, s.name + "[]"})
@@ -242,6 +245,12 @@ func (w *walker) walkStruct(t types.Type, st *types.Struct, addr bool, path stri
 
 	if w.mode == decode && hasSerializedField(st) {
 		w.report(site{w.typePos(t), name}, "case-insensitive")
+	}
+	if len(duplicateNames(st)) > 0 {
+		w.report(site{w.typePos(t), name}, "duplicate-name")
+	}
+	if w.mode == decode && w.resetsOnNull(st) {
+		w.report(site{w.typePos(t), name}, "null-resets")
 	}
 	for i := 0; i < st.NumFields(); i++ {
 		f := st.Field(i)
@@ -278,6 +287,75 @@ func (w *walker) walkStruct(t types.Type, st *types.Struct, addr bool, path stri
 		}
 		w.walk(ft, addr, s)
 	}
+}
+
+// duplicateNames returns the JSON names used by two or more serialized
+// fields of st. Fields promoted from embedded structs resolve by depth in
+// both versions, so only the struct's own fields are compared.
+func duplicateNames(st *types.Struct) map[string]bool {
+	count := map[string]int{}
+	for i := 0; i < st.NumFields(); i++ {
+		if n := ownName(st, i); n != "" {
+			count[n]++
+		}
+	}
+	dups := map[string]bool{}
+	for n, c := range count {
+		if c > 1 {
+			dups[n] = true
+		}
+	}
+	return dups
+}
+
+// ownName is the JSON name of field i when it is serialized as a member of
+// st itself (not omitted, unexported or promoted from an embedded struct),
+// or "".
+func ownName(st *types.Struct, i int) string {
+	f := st.Field(i)
+	tag, _ := reflect.StructTag(st.Tag(i)).Lookup("json")
+	if tag == "-" {
+		return ""
+	}
+	jsonName, _ := parseTag(tag)
+	if f.Embedded() && jsonName == "" {
+		if _, ok := deref(f.Type()).Underlying().(*types.Struct); ok {
+			return ""
+		}
+	}
+	if !f.Exported() {
+		return ""
+	}
+	if jsonName == "" {
+		return f.Name()
+	}
+	return jsonName
+}
+
+// resetsOnNull says whether st has a serialized field of a kind that cannot
+// be nil (struct, array, number, string, bool), with or without a custom
+// unmarshaler (found by the property test: time.Time and text unmarshalers
+// are reset too): v1 ignores a JSON null for it and v2 resets it.
+func (w *walker) resetsOnNull(st *types.Struct) bool {
+	for i := 0; i < st.NumFields(); i++ {
+		f := st.Field(i)
+		tag, _ := reflect.StructTag(st.Tag(i)).Lookup("json")
+		if tag == "-" || !f.Exported() {
+			continue
+		}
+		jsonName, _ := parseTag(tag)
+		ft := types.Unalias(f.Type())
+		if f.Embedded() && jsonName == "" {
+			if _, ok := deref(ft).Underlying().(*types.Struct); ok {
+				continue
+			}
+		}
+		switch ft.Underlying().(type) {
+		case *types.Basic, *types.Struct, *types.Array:
+			return true
+		}
+	}
+	return false
 }
 
 func (w *walker) tagRules(ft types.Type, opts map[string]bool, s site) {
@@ -326,8 +404,12 @@ func (w *walker) omitDiffers(t types.Type) string {
 // allOmittable says whether every serialized field of st can be left out,
 // so that v2 may encode the struct as {} and omit it.
 func allOmittable(st *types.Struct) bool {
+	dups := duplicateNames(st) // dropped by v1, and by v2 with the legacy error option
 	for i := 0; i < st.NumFields(); i++ {
 		f := st.Field(i)
+		if dups[ownName(st, i)] {
+			continue
+		}
 		tag := reflect.StructTag(st.Tag(i)).Get("json")
 		if tag == "-" || (!f.Exported() && !f.Embedded()) {
 			continue

@@ -17,7 +17,7 @@ example.com/pets: 2 finding(s)
   to keep v1 behaviour under v2: json.OmitEmptyWithLegacySemantics(true), jsonv2.FormatNilSliceAsNull(true)
 ```
 
-`jsonv2-audit -rules` lists every rule. `-json` prints machine-readable output, `-all` lists the case-insensitive decoding findings one by one, `-tests` includes test files, and `-skip nil-slice,omitempty` turns rules off. Exit status is 0 with no findings, 1 with findings, 2 when packages fail to load or a skipped rule does not exist.
+`jsonv2-audit -rules` lists every rule. `-json` prints machine-readable output, `-all` lists the case-insensitive and null-reset decoding findings one by one (the text output counts them per package), `-tests` includes test files, and `-skip nil-slice,omitempty` turns rules off. Exit status is 0 with no findings, 1 with findings, 2 when packages fail to load or a skipped rule does not exist.
 
 ## Under go vet
 
@@ -59,4 +59,4 @@ issues:
 
 `skip` is the only setting; an unknown rule ID or setting stops the run with an error. golangci-lint keeps one issue per line by default, and every finding on an imported type sits on the call line, so `uniq-by-line: false` shows them all. `scripts/golangci-e2e.sh` builds the custom binary from this checkout and checks it (CI job `golangci-plugin`).
 
-Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1); go vet tool, golangci-lint plugin and `-skip` added 2026-11-12; proof group added 2026-11-13: tag parser fuzz test, property test over generated struct types against real v1 and v2 output (go1.27.0, 60 seeds of 150 types, all pass), mutation tester `go run ./scripts/mutate` (164 mutants, 137 killed, 83.5%), benchmark 5.9 ms and 47k allocs for 800 call sites. Requires Go 1.27. Last updated: 2026-11-13.
+Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1); three more rules 2026-11-13 (`array-length`, `null-resets`, `duplicate-name`, 16 in all), each found by running v1 and v2 side by side on go1.27.0 and proved with its v1-keeping option (`json.UnmarshalArrayFromAnyLength`, `json.MergeWithLegacySemantics`, `json.ReportErrorsWithLegacySemantics`); go vet tool, golangci-lint plugin and `-skip` added 2026-11-12; proof group added 2026-11-13: tag parser fuzz test, property test over generated struct types against real v1 and v2 output, now with null and short-array decode variants (go1.27.0, 60 seeds of 150 types, all pass), mutation tester `go run ./scripts/mutate` (164 mutants, 137 killed, 83.5%), benchmark 5.9 ms and 47k allocs for 800 call sites. Requires Go 1.27. Last updated: 2026-11-13.

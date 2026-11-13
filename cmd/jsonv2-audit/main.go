@@ -170,11 +170,14 @@ func printText(w io.Writer, sums []Summary, all bool) {
 		_, _ = fmt.Fprintln(w, "no differences found between encoding/json and encoding/json/v2")
 		return
 	}
-	folded := map[string]int{}
+	folded := map[string]map[string]int{}
 	for _, s := range sums {
 		for _, f := range s.Findings {
-			if f.Rule == "case-insensitive" && !all {
-				folded[s.Package]++
+			if r, _ := jsonv2audit.RuleByID(f.Rule); r.Folded && !all {
+				if folded[s.Package] == nil {
+					folded[s.Package] = map[string]int{}
+				}
+				folded[s.Package][f.Rule]++
 				continue
 			}
 			_, _ = fmt.Fprintf(w, "%s:%d:%d: [%s] %s\n", f.File, f.Line, f.Column, f.Rule, f.Message)
@@ -183,8 +186,10 @@ func printText(w io.Writer, sums []Summary, all bool) {
 	_, _ = fmt.Fprintln(w)
 	for _, s := range sums {
 		_, _ = fmt.Fprintf(w, "%s: %d finding(s)\n", s.Package, len(s.Findings))
-		if n := folded[s.Package]; n > 0 {
-			_, _ = fmt.Fprintf(w, "  %d decoded struct type(s) rely on case-insensitive name matching (-all lists them)\n", n)
+		for _, r := range jsonv2audit.Rules {
+			if n := folded[s.Package][r.ID]; n > 0 {
+				_, _ = fmt.Fprintf(w, "  %d %s (-all lists them)\n", n, r.FoldedNote)
+			}
 		}
 		if len(s.Options) > 0 {
 			_, _ = fmt.Fprintf(w, "  to keep v1 behaviour under v2: %s\n", strings.Join(s.Options, ", "))
