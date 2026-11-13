@@ -97,7 +97,7 @@ func main() {
 
 	dir, err := os.MkdirTemp("", "mutate-*")
 	check(err)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	check(copyTree(".", dir))
 	target := filepath.Join(dir, *file)
 
