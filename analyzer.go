@@ -102,11 +102,17 @@ var roots = map[string]struct {
 	arg  int
 	mode mode
 }{
-	"encoding/json.Marshal":           {0, encode},
-	"encoding/json.MarshalIndent":     {0, encode},
-	"(*encoding/json.Encoder).Encode": {0, encode},
-	"encoding/json.Unmarshal":         {1, decode},
-	"(*encoding/json.Decoder).Decode": {0, decode},
+	"encoding/json.Marshal":            {0, encode},
+	"encoding/json/v2.Marshal":         {0, encode},
+	"encoding/json/v2.MarshalWrite":    {1, encode},
+	"encoding/json/v2.MarshalEncode":   {1, encode},
+	"encoding/json/v2.Unmarshal":       {1, decode},
+	"encoding/json/v2.UnmarshalRead":   {1, decode},
+	"encoding/json/v2.UnmarshalDecode": {1, decode},
+	"encoding/json.MarshalIndent":      {0, encode},
+	"(*encoding/json.Encoder).Encode":  {0, encode},
+	"encoding/json.Unmarshal":          {1, decode},
+	"(*encoding/json.Decoder).Decode":  {0, decode},
 }
 
 // site is where a finding is reported and the name it is reported under.
@@ -119,6 +125,9 @@ type state struct {
 	pass     *analysis.Pass
 	skip     ruleSet
 	reported map[string]bool
+	// collect, when set, receives the IDs of the rules that apply instead
+	// of reporting them (used for calls that pass DefaultOptionsV1).
+	collect map[string]bool
 }
 
 type walker struct {
@@ -131,6 +140,7 @@ type walker struct {
 func run(pass *analysis.Pass, skip ruleSet) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	st := &state{pass: pass, skip: skip, reported: map[string]bool{}}
+	v1vars := v1Variables(pass)
 	insp.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
 		call := n.(*ast.CallExpr)
 		fn, _ := typeutil.Callee(pass.TypesInfo, call).(*types.Func)
@@ -145,10 +155,128 @@ func run(pass *analysis.Pass, skip ruleSet) (any, error) {
 		if t == nil {
 			return
 		}
+		if strings.HasPrefix(fn.FullName(), "encoding/json/v2.") {
+			if pos := v1Options(pass, v1vars, call.Args[r.arg+1:]); pos.IsValid() && !skip["v1-options"] {
+				reportV1Options(pass, call, pos, t, r.mode, fn.Name())
+			}
+			return
+		}
 		w := &walker{state: st, call: call.Pos(), mode: r.mode, seen: map[string]bool{}}
 		w.root(t, "value passed to "+fn.Name())
 	})
 	return nil, nil
+}
+
+// reportV1Options runs the rules over t with collection on and reports which
+// of the options in DefaultOptionsV1 the value needs and which can be dropped.
+func reportV1Options(pass *analysis.Pass, call *ast.CallExpr, pos token.Pos, t types.Type, m mode, fn string) {
+	st := &state{pass: pass, skip: ruleSet{}, reported: map[string]bool{}, collect: map[string]bool{}}
+	w := &walker{state: st, call: call.Pos(), mode: m, seen: map[string]bool{}}
+	w.root(t, "value passed to "+fn)
+	need, drop := map[string]bool{}, []string{}
+	var needed []string
+	for id := range st.collect {
+		need[optionName(ruleByID[id].Option)] = true
+	}
+	seen := map[string]bool{}
+	for _, r := range Rules {
+		n := optionName(r.Option)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		if need[n] {
+			needed = append(needed, n)
+		} else {
+			drop = append(drop, n)
+		}
+	}
+	msg := types.TypeString(deref(t), types.RelativeTo(pass.Pkg)) + ": " + fn + " with json.DefaultOptionsV1() turns on every v1 behaviour; "
+	if len(needed) == 0 {
+		msg += "this value uses none of the " + fmt.Sprint(len(seen)) + " options the analyzer can judge, so pass only the options you need"
+	} else {
+		msg += "this value needs " + strings.Join(needed, ", ") + "; pass these instead"
+	}
+	if len(drop) > 0 {
+		msg += "; not needed by this value: " + strings.Join(drop, ", ")
+	}
+	msg += "; not judged (depend on the data, not the types): " + strings.Join(UnanalyzedV1Options, ", ")
+	pass.Report(analysis.Diagnostic{Pos: pos, Category: "v1-options", Message: msg, URL: docURL + "#v1-options"})
+}
+
+// optionName turns "json.Foo(true)" into "json.Foo".
+func optionName(expr string) string {
+	n, _, _ := strings.Cut(expr, "(")
+	return n
+}
+
+// v1Options returns the position of a json.DefaultOptionsV1() call among
+// args, directly or through a variable that is set once from it, or NoPos.
+func v1Options(pass *analysis.Pass, vars map[types.Object]bool, args []ast.Expr) token.Pos {
+	for _, a := range args {
+		if isV1Call(pass, a) {
+			return a.Pos()
+		}
+		if id, ok := ast.Unparen(a).(*ast.Ident); ok && vars[pass.TypesInfo.ObjectOf(id)] {
+			return a.Pos()
+		}
+	}
+	return token.NoPos
+}
+
+func isV1Call(pass *analysis.Pass, e ast.Expr) bool {
+	c, ok := ast.Unparen(e).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	fn, _ := typeutil.Callee(pass.TypesInfo, c).(*types.Func)
+	return fn != nil && fn.FullName() == "encoding/json.DefaultOptionsV1"
+}
+
+// v1Variables finds variables whose only write is an initialisation from
+// json.DefaultOptionsV1(), so passing the variable is the same as passing
+// the call. A variable assigned again or whose address is taken is left out.
+func v1Variables(pass *analysis.Pass) map[types.Object]bool {
+	writes := map[types.Object]int{}
+	init := map[types.Object]bool{}
+	for _, f := range pass.Files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.ValueSpec:
+				for i, id := range n.Names {
+					o := pass.TypesInfo.Defs[id]
+					writes[o]++
+					if len(n.Values) == len(n.Names) && isV1Call(pass, n.Values[i]) {
+						init[o] = true
+					}
+				}
+			case *ast.AssignStmt:
+				for i, l := range n.Lhs {
+					id, ok := l.(*ast.Ident)
+					if !ok {
+						continue
+					}
+					o := pass.TypesInfo.ObjectOf(id)
+					writes[o]++
+					if n.Tok == token.DEFINE && len(n.Lhs) == len(n.Rhs) && isV1Call(pass, n.Rhs[i]) {
+						init[o] = true
+					}
+				}
+			case *ast.UnaryExpr:
+				if id, ok := n.X.(*ast.Ident); ok && n.Op == token.AND {
+					writes[pass.TypesInfo.ObjectOf(id)] += 2
+				}
+			}
+			return true
+		})
+	}
+	out := map[types.Object]bool{}
+	for o := range init {
+		if o != nil && writes[o] == 1 {
+			out[o] = true
+		}
+	}
+	return out
 }
 
 func (w *walker) root(t types.Type, name string) {
@@ -472,6 +600,10 @@ func isMethod(t types.Type, name string) bool {
 
 func (w *walker) report(s site, id string) {
 	key := id + "|" + s.name
+	if w.collect != nil {
+		w.collect[id] = true
+		return
+	}
 	if w.skip[id] || w.reported[key] {
 		return
 	}

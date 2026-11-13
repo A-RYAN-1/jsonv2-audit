@@ -41,3 +41,7 @@ func TestSkipFlag(t *testing.T) {
 		t.Error("an unknown rule in the flag gave no error")
 	}
 }
+
+func TestV1Options(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), jsonv2audit.Analyzer, "c")
+}

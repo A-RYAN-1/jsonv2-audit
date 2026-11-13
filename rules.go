@@ -18,6 +18,9 @@ type Rule struct {
 	// them.
 	Folded     bool
 	FoldedNote string
+	// Advisory rules describe a call, not a difference in behaviour: there
+	// is no v1 and v2 output to compare, so the proof tests skip them.
+	Advisory bool
 }
 
 // Rules lists every rule the analyzer reports, in a stable order.
@@ -103,6 +106,18 @@ var Rules = []Rule{
 		Summary: "two fields of one struct with the same JSON name are both silently ignored in v1 and an error in v2",
 		Option:  "json.ReportErrorsWithLegacySemantics(true)",
 	},
+	{
+		ID: "v1-options", Encode: true, Decode: true, Advisory: true,
+		Summary: "a call to encoding/json/v2 that passes json.DefaultOptionsV1() turns on every v1 behaviour, including ones this value never uses",
+	},
+}
+
+// UnanalyzedV1Options are the members of json.DefaultOptionsV1() that no
+// rule models: whether they matter depends on the data, not the types.
+var UnanalyzedV1Options = []string{
+	"jsonv2.Deterministic", "json.MatchCaseSensitiveDelimiter", "json.ParseBytesWithLooseRFC4648",
+	"json.ParseTimeWithLooseRFC3339", "jsontext.AllowDuplicateNames", "jsontext.AllowInvalidUTF8",
+	"jsontext.EscapeForHTML", "jsontext.EscapeForJS", "jsontext.PreserveRawStrings",
 }
 
 var ruleByID = func() map[string]Rule {

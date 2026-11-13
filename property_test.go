@@ -356,7 +356,7 @@ func TestPropertyPredictionsMatchEncoding(t *testing.T) {
 		}
 		var missing []string
 		for _, r := range jsonv2audit.Rules {
-			if !seen[r.ID] && r.ID != "format-tag" && r.ID != "ptr-method" {
+			if !seen[r.ID] && !r.Advisory && r.ID != "format-tag" && r.ID != "ptr-method" {
 				missing = append(missing, r.ID)
 			}
 		}

@@ -145,6 +145,9 @@ func audit(an *analysis.Analyzer, dir string, patterns []string, tests bool) ([]
 		opts, fixes := map[string]bool{}, map[string]bool{}
 		for _, f := range s.Findings {
 			r, _ := jsonv2audit.RuleByID(f.Rule)
+			if r.Advisory {
+				continue
+			}
 			if r.Option == "" {
 				fixes[r.ID] = true
 			} else {
