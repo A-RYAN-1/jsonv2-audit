@@ -30,7 +30,7 @@ type Embedded struct {
 	Codes map[string]int `json:"codes"` // want `Embedded.Codes: a nil map encodes as null in v1`
 }
 
-type Input struct { // want `Input: object names match field names case-insensitively in v1`
+type Input struct { // want `Input: object names match field names case-insensitively in v1` `Input: a JSON null leaves a struct`
 	ID string `json:"id"`
 }
 
