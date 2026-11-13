@@ -59,4 +59,4 @@ issues:
 
 `skip` is the only setting; an unknown rule ID or setting stops the run with an error. golangci-lint keeps one issue per line by default, and every finding on an imported type sits on the call line, so `uniq-by-line: false` shows them all. `scripts/golangci-e2e.sh` builds the custom binary from this checkout and checks it (CI job `golangci-plugin`).
 
-Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1); go vet tool, golangci-lint plugin and `-skip` added 2026-11-12. Requires Go 1.27. Last updated: 2026-11-12.
+Status: private, in development; analyzer, 13 rules and the command merged 2026-11-10 (#1); go vet tool, golangci-lint plugin and `-skip` added 2026-11-12; proof group added 2026-11-13: tag parser fuzz test, property test over generated struct types against real v1 and v2 output (go1.27.0, 60 seeds of 150 types, all pass), mutation tester `go run ./scripts/mutate` (164 mutants, 137 killed, 83.5%), benchmark 5.9 ms and 47k allocs for 800 call sites. Requires Go 1.27. Last updated: 2026-11-13.

@@ -21,6 +21,10 @@ jobs:
       - run: go test -count=1 -cover ./...
       - if: runner.os == 'Linux'
         run: go test -race -count=1 ./...
+      - if: runner.os == 'Linux'
+        run: go test -run '^$' -fuzz FuzzParseTag -fuzztime 30s .
+      - if: runner.os == 'Linux'
+        run: JSONV2AUDIT_SEEDS=20 go test -run Property -count=1 .
   lint:
     runs-on: ubuntu-latest
     steps:
