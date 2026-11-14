@@ -168,7 +168,9 @@ func errText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return "  (error: " + err.Error() + ")"
+	// v2 picks "cannot" or "unable to" at random so nobody matches error
+	// text; fix one wording so the page is reproducible.
+	return "  (error: " + strings.ReplaceAll(err.Error(), "unable to ", "cannot ") + ")"
 }
 
 func table(intro, v1, v2, v3 string, hasOpt bool) string {
