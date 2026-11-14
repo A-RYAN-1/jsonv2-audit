@@ -45,3 +45,7 @@ func TestSkipFlag(t *testing.T) {
 func TestV1Options(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), jsonv2audit.Analyzer, "c")
 }
+
+func TestPinnedCases(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), jsonv2audit.Analyzer, "d")
+}

@@ -130,7 +130,7 @@ type state struct {
 	reported map[string]bool
 	// collect, when set, receives the IDs of the rules that apply instead
 	// of reporting them (used for calls that pass DefaultOptionsV1).
-	collect map[string]bool
+	collect map[string]struct{}
 }
 
 type walker struct {
@@ -173,7 +173,7 @@ func run(pass *analysis.Pass, skip ruleSet) (any, error) {
 // reportV1Options runs the rules over t with collection on and reports which
 // of the options in DefaultOptionsV1 the value needs and which can be dropped.
 func reportV1Options(pass *analysis.Pass, call *ast.CallExpr, pos token.Pos, t types.Type, m mode, fn string) {
-	st := &state{pass: pass, skip: ruleSet{}, reported: map[string]bool{}, collect: map[string]bool{}}
+	st := &state{pass: pass, skip: ruleSet{}, reported: map[string]bool{}, collect: map[string]struct{}{}}
 	w := &walker{state: st, call: call.Pos(), mode: m, seen: map[string]bool{}}
 	w.root(t, "value passed to "+fn)
 	need, drop := map[string]bool{}, []string{}
@@ -241,7 +241,7 @@ func isV1Call(pass *analysis.Pass, e ast.Expr) bool {
 // the call. A variable assigned again or whose address is taken is left out.
 func v1Variables(pass *analysis.Pass) map[types.Object]bool {
 	writes := map[types.Object]int{}
-	init := map[types.Object]bool{}
+	init := map[types.Object]struct{}{}
 	for _, f := range pass.Files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch n := n.(type) {
@@ -250,7 +250,7 @@ func v1Variables(pass *analysis.Pass) map[types.Object]bool {
 					o := pass.TypesInfo.Defs[id]
 					writes[o]++
 					if len(n.Values) == len(n.Names) && isV1Call(pass, n.Values[i]) {
-						init[o] = true
+						init[o] = struct{}{}
 					}
 				}
 			case *ast.AssignStmt:
@@ -262,7 +262,7 @@ func v1Variables(pass *analysis.Pass) map[types.Object]bool {
 					o := pass.TypesInfo.ObjectOf(id)
 					writes[o]++
 					if n.Tok == token.DEFINE && len(n.Lhs) == len(n.Rhs) && isV1Call(pass, n.Rhs[i]) {
-						init[o] = true
+						init[o] = struct{}{}
 					}
 				}
 			case *ast.UnaryExpr:
@@ -604,7 +604,7 @@ func isMethod(t types.Type, name string) bool {
 func (w *walker) report(s site, id string) {
 	key := id + "|" + s.name
 	if w.collect != nil {
-		w.collect[id] = true
+		w.collect[id] = struct{}{}
 		return
 	}
 	if w.skip[id] || w.reported[key] {
