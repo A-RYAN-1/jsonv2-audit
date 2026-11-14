@@ -6,12 +6,17 @@
 //
 // Usage, from the module root:
 //
-//	go run ./scripts/mutate [-file analyzer.go] [-timeout 3m] [-v]
+//	go run ./scripts/mutate [-file analyzer.go] [-timeout 3m] [-v] [-shard i/n] [-json out.json]
+//
+// -shard i/n runs every n-th mutant starting at i (0-based), so n machines
+// split one run; it defaults to SHARD_INDEX/SHARD_TOTAL when those are set.
+// -json writes the counts and the survivors for merging shard results.
 package main
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -44,7 +49,18 @@ func main() {
 	file := flag.String("file", "analyzer.go", "file to mutate, relative to the module root")
 	timeout := flag.Duration("timeout", 3*time.Minute, "per-mutant test timeout")
 	verbose := flag.Bool("v", false, "list killed mutants too")
+	shardFlag := flag.String("shard", "", "run shard i of n, as i/n (default from SHARD_INDEX/SHARD_TOTAL)")
+	jsonOut := flag.String("json", "", "write the result as JSON to this file")
 	flag.Parse()
+	if *shardFlag == "" && os.Getenv("SHARD_TOTAL") != "" {
+		*shardFlag = os.Getenv("SHARD_INDEX") + "/" + os.Getenv("SHARD_TOTAL")
+	}
+	shard, shards := 0, 1
+	if *shardFlag != "" {
+		if _, err := fmt.Sscanf(*shardFlag, "%d/%d", &shard, &shards); err != nil || shards < 1 || shard < 0 || shard >= shards {
+			check(fmt.Errorf("bad -shard %q: want i/n with 0 <= i < n", *shardFlag))
+		}
+	}
 
 	src, err := os.ReadFile(*file)
 	check(err)
@@ -94,6 +110,14 @@ func main() {
 		return true
 	})
 	sort.Slice(muts, func(i, j int) bool { return muts[i].off < muts[j].off })
+	total := len(muts)
+	if shards > 1 {
+		var mine []mutant
+		for i := shard; i < len(muts); i += shards {
+			mine = append(mine, muts[i])
+		}
+		muts = mine
+	}
 
 	dir, err := os.MkdirTemp("", "mutate-*")
 	check(err)
@@ -131,6 +155,20 @@ func main() {
 	check(os.WriteFile(target, src, 0o644))
 	fmt.Printf("\n%s: %d mutants, %d killed, %d survived (score %.1f%%)\n",
 		*file, len(muts), killed, len(survived), 100*float64(killed)/float64(len(muts)))
+	if shards > 1 {
+		fmt.Printf("shard %d/%d of %d mutants\n", shard, shards, total)
+	}
+	if *jsonOut != "" {
+		if survived == nil {
+			survived = []string{}
+		}
+		b, err := json.MarshalIndent(map[string]any{
+			"file": *file, "shard": shard, "shards": shards, "total": total,
+			"mutants": len(muts), "killed": killed, "invalid": invalid, "survived": survived,
+		}, "", "  ")
+		check(err)
+		check(os.WriteFile(*jsonOut, append(b, '\n'), 0o644))
+	}
 }
 
 func copyTree(from, to string) error {
