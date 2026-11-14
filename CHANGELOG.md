@@ -13,6 +13,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - Rule `v1-options`: for v2 calls that pass `json.DefaultOptionsV1()`, the options the value needs and the ones it can drop (2026-11-13).
 - `docs/rules.md`, generated from the rule table with real v1 and v2 output; every finding links to its section.
 - GoReleaser configuration and a release workflow that runs on a `v*` tag and creates a draft release.
+- Mutation tester `-shard i/n` and `-json`, and a `heavy-run` workflow that runs one command split into shards on Actions (2026-11-14).
 
 ### Fixed
 
