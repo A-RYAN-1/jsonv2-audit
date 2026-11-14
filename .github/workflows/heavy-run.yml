@@ -1,0 +1,58 @@
+# Run one long or memory-hungry command on GitHub Actions, split into shards.
+# Dispatched by the workspace placement tool; each shard gets SHARD_INDEX and
+# SHARD_TOTAL and uploads out/ plus its log as an artifact.
+name: heavy-run
+on:
+  workflow_dispatch:
+    inputs:
+      cmd:
+        description: bash command, run from the repo root
+        required: true
+      shards:
+        description: number of shards
+        default: "1"
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        env:
+          SHARDS: ${{ inputs.shards }}
+        run: |
+          case "$SHARDS" in ''|*[!0-9]*) echo "shards must be a number" >&2; exit 1;; esac
+          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -cs .)" >> "$GITHUB_OUTPUT"
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: hashFiles('go.mod') != ''
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - name: run
+        env:
+          CMD: ${{ inputs.cmd }}
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ inputs.shards }}
+        run: |
+          mkdir -p out
+          bash -c "$CMD" 2>&1 | tee "out/log-$SHARD_INDEX.txt"
+          exit "${PIPESTATUS[0]}"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out/
