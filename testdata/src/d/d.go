@@ -209,3 +209,51 @@ type FormatOnly struct {
 }
 
 func format() { _, _ = json.Marshal(FormatOnly{}) }
+
+// Second mutation round (2026-11-14).
+
+// A struct field with omitempty but no name is an ordinary field, not a
+// promoted one.
+type OmitStructNoName struct {
+	Q quiet `json:",omitempty"` // want `OmitStructNoName.Q: omitempty never omits a struct`
+}
+
+// An embedded unexported struct is promoted, so its exported fields count.
+type embN struct{ S []int } // want `embN.S: a nil slice encodes as null`
+type EmbN struct{ embN }
+
+// An embedded value struct inside an addressable root is addressable too.
+type embVal struct{ V ptrM }
+type EmbValAddr struct{ embVal }
+
+// An untagged struct field takes part in name collisions.
+type DupStructField struct { // want `DupStructField: two fields of one struct`
+	In    quiet
+	Other int `json:"In"`
+}
+
+// A struct field (not embedded) keeps its old value on null.
+type empty struct{}
+type ResetsViaStruct struct { // want `ResetsViaStruct: object names match field names case-insensitively` `ResetsViaStruct: a JSON null leaves`
+	E empty
+}
+
+// omitempty on a type whose marshaler has a pointer receiver: the marshaler
+// rule applies, not the omitempty one.
+type PFlag bool
+
+func (*PFlag) MarshalJSON() ([]byte, error) { return []byte(`1`), nil }
+
+type PFlagField struct {
+	F PFlag `json:"f,omitempty"` // want `PFlagField.F: a marshal method on a pointer receiver`
+}
+
+func round2() {
+	_, _ = json.Marshal(OmitStructNoName{})
+	_, _ = json.Marshal(EmbN{})
+	_, _ = json.Marshal(&EmbValAddr{})
+	_, _ = json.Marshal(DupStructField{})
+	_ = json.Unmarshal(nil, new(ResetsViaStruct))
+	_, _ = json.Marshal(PFlagField{})
+	_ = json.Unmarshal(nil, map[string]int{}) // a decode root that is not a pointer gets no nil rule
+}
