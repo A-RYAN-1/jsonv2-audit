@@ -11,3 +11,5 @@ type Reply struct {
 }
 
 func Encode(r Reply) ([]byte, error) { return json.Marshal(r) }
+
+func Decode(b []byte, r *Reply) error { return json.Unmarshal(b, r) }

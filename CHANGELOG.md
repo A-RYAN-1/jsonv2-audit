@@ -4,6 +4,10 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+
+- The vet tool and the golangci-lint plugin no longer report `case-insensitive` and `null-resets` by default; `-jsonv2audit.all` and the plugin setting `all` turn them on, and `Config.All` does the same in code (2026-11-16).
+
 ### Added
 
 - Analyzer for `encoding/json` call sites with 13 rules, each with the v2 option that keeps v1 behaviour, and the `jsonv2-audit` command (2026-11-10).

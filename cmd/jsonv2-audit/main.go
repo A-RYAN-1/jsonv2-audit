@@ -77,7 +77,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	an, err := jsonv2audit.NewAnalyzer(jsonv2audit.Config{Skip: strings.Split(*skip, ",")})
+	an, err := jsonv2audit.NewAnalyzer(jsonv2audit.Config{Skip: strings.Split(*skip, ","), All: true})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "jsonv2-audit:", err)
 		return 2

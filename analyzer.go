@@ -23,12 +23,16 @@ const rulesURL = docURL + "/blob/main/docs/rules.md"
 // marshaling or unmarshaling changes under encoding/json/v2. Its -skip flag
 // takes a comma-separated list of rule IDs not to report; under go vet it
 // is spelled -jsonv2audit.skip.
-var Analyzer = newAnalyzer(ruleSet{})
+var Analyzer = newAnalyzer(ruleSet{}, true)
 
 // Config selects what an analyzer made by [NewAnalyzer] reports.
 type Config struct {
 	// Skip lists rule IDs (see [Rules]) that are not reported.
 	Skip []string
+	// All also reports the rules marked Folded (case-insensitive,
+	// null-resets), which fire on nearly every decoded struct. Off by
+	// default so vet and linter output stays readable.
+	All bool
 }
 
 // NewAnalyzer returns an analyzer like [Analyzer] that applies cfg. It is
@@ -41,18 +45,33 @@ func NewAnalyzer(cfg Config) (*analysis.Analyzer, error) {
 			return nil, err
 		}
 	}
-	return newAnalyzer(skip), nil
+	return newAnalyzer(skip, cfg.All), nil
 }
 
-func newAnalyzer(skip ruleSet) *analysis.Analyzer {
+func newAnalyzer(skip ruleSet, all bool) *analysis.Analyzer {
 	a := &analysis.Analyzer{
 		Name:     "jsonv2audit",
 		Doc:      "report encoding/json types whose behaviour changes under encoding/json/v2, with the option that keeps v1 behaviour",
 		URL:      docURL,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
-		Run:      func(pass *analysis.Pass) (any, error) { return run(pass, skip) },
+		Run: func(pass *analysis.Pass) (any, error) {
+			if all {
+				return run(pass, skip)
+			}
+			s := ruleSet{}
+			for id := range skip {
+				s[id] = true
+			}
+			for _, r := range Rules {
+				if r.Folded {
+					s[r.ID] = true
+				}
+			}
+			return run(pass, s)
+		},
 	}
 	a.Flags.Var(skip, "skip", "comma-separated rule IDs not to report")
+	a.Flags.BoolVar(&all, "all", all, "also report the rules that fire on nearly every decoded struct (case-insensitive, null-resets)")
 	return a
 }
 
