@@ -58,6 +58,14 @@ func TestGoVet(t *testing.T) {
 		t.Errorf("a finding on an imported type should be reported at the call, not in model.go:\n%s", out)
 	}
 
+	if strings.Contains(out, "case-insensitive") {
+		t.Errorf("case-insensitive is off by default:\n%s", out)
+	}
+	out, err = vet(t, bin, "-jsonv2audit.all")
+	if err == nil || !strings.Contains(out, "case-insensitive") {
+		t.Errorf("-jsonv2audit.all should report case-insensitive, got err %v:\n%s", err, out)
+	}
+
 	out, err = vet(t, bin, "-jsonv2audit.skip=nil-slice,omitempty")
 	if err != nil {
 		t.Fatalf("go vet with both rules skipped failed: %v\n%s", err, out)

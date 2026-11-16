@@ -25,7 +25,9 @@
 //	issues:
 //	  uniq-by-line: false
 //
-// The only setting is skip, a list of rule IDs not to report. golangci-lint
+// Settings: skip, a list of rule IDs not to report, and all (default false),
+// which also reports case-insensitive and null-resets, the two rules that fire
+// on nearly every decoded struct. golangci-lint
 // keeps one issue per line by default; findings on imported types share the
 // call's line, so uniq-by-line: false shows every one.
 package golangci
@@ -42,6 +44,7 @@ func init() { register.Plugin("jsonv2audit", New) }
 // Settings is the settings block of the plugin in .golangci.yml.
 type Settings struct {
 	Skip []string `json:"skip"`
+	All  bool     `json:"all"`
 }
 
 type plugin struct{ analyzer *analysis.Analyzer }
@@ -53,7 +56,7 @@ func New(settings any) (register.LinterPlugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	a, err := jsonv2audit.NewAnalyzer(jsonv2audit.Config{Skip: s.Skip})
+	a, err := jsonv2audit.NewAnalyzer(jsonv2audit.Config{Skip: s.Skip, All: s.All})
 	if err != nil {
 		return nil, err
 	}
